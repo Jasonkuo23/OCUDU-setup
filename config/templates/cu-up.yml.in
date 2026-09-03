@@ -1,7 +1,7 @@
 cu_up:
   e1ap:
-    cu_cp_addr: ${E1_CP_IP}
-    bind_addr: ${E1_UP_IP}
+    addrs: ${E1_CP_IP}
+    bind_addrs: ${E1_UP_IP}
   ngu:
     socket:
       - bind_addr: ${N3_LOCAL_IP}

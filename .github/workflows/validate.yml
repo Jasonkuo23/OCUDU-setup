@@ -1,0 +1,26 @@
+name: Validate portable deployment
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-and-config:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y gettext-base shellcheck
+      - name: Check shell scripts
+        run: shellcheck -x ./*.sh ./optional/temp-gm/*.sh ./tests/*.sh
+      - name: Test site validation and rendering
+        run: ./tests/test-config-validation.sh
+      - name: Validate Compose model
+        run: |
+          cp config/site.env.example config/site.env
+          sed -i 's/^RU_MGMT_ADDR=$/RU_MGMT_ADDR=192.168.2.174\/24/' config/site.env
+          ./cudu.sh render
+          docker compose --env-file config/site.env --profile ofh config -q

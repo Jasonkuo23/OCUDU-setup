@@ -40,30 +40,20 @@ trap restore_generated_ownership EXIT
 # shellcheck source=load-site-env.sh
 source "$SCRIPT_DIR/load-site-env.sh"
 
-if [ -z "${RU_MGMT_ADDR:-}" ]; then
-  echo 'RU_MGMT_ADDR is required for the host O-RU management path.' >&2
-  echo 'Set an unused fronthaul CIDR in config/site.env; it must differ from RU_IP and GM_IP.' >&2
-  exit 1
-fi
+# Validate every site value before installing packages or changing the host.
+"$SCRIPT_DIR/validate-site-config.sh"
+
 ru_mgmt_ip="${RU_MGMT_ADDR%/*}"
-if [ "$ru_mgmt_ip" = "$RU_IP" ] || [ "$ru_mgmt_ip" = "$GM_IP" ]; then
-  echo "RU_MGMT_ADDR conflicts with RU_IP or GM_IP: $RU_MGMT_ADDR" >&2
-  exit 1
-fi
-if [ "$PTP_ROLE" != external-gm ]; then
-  echo "Core setup requires PTP_ROLE=external-gm; optional diagnostics are isolated under optional/." >&2
-  exit 1
-fi
 
 if [ "$SKIP_PACKAGES" -eq 0 ]; then
   if [ ! -r /etc/os-release ]; then
-    echo 'This automatic installer supports apt-based Ubuntu/Debian hosts.' >&2
+    echo 'This automatic installer supports Ubuntu hosts with apt and systemd.' >&2
     exit 1
   fi
   # shellcheck disable=SC1091
   source /etc/os-release
   case "${ID:-}" in
-    ubuntu|debian) ;;
+    ubuntu) ;;
     *) echo "Unsupported automatic-install OS: ${ID:-unknown}" >&2; exit 1 ;;
   esac
   packages=(linuxptp ethtool iproute2 iputils-ping arping tcpdump gettext-base util-linux pciutils kmod)
@@ -78,7 +68,7 @@ if [ "$SKIP_PACKAGES" -eq 0 ]; then
   systemctl enable --now docker
 fi
 
-for command_name in docker envsubst ip ethtool ptp4l phc2sys pmc; do
+for command_name in docker envsubst ip ethtool ptp4l phc2sys pmc sysctl awk grep; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Required command is unavailable: $command_name" >&2
     exit 1
@@ -94,7 +84,25 @@ fi
 
 if [ "$SKIP_NETWORK" -eq 0 ]; then
   ip link set "$FH_IF" up
-  if ! ip -4 addr show dev "$FH_IF" | grep -Fq "$RU_MGMT_ADDR"; then
+  address_on_interface() {
+    local interface="$1" cidr="$2"
+    ip -4 -o addr show dev "$interface" 2>/dev/null |
+      awk -v expected="$cidr" '$4 == expected {found=1} END {exit !found}'
+  }
+  address_exists_elsewhere() {
+    local interface="$1" address="$2"
+    ip -4 -o addr show 2>/dev/null |
+      awk -v expected="$address" -v wanted="$interface" '
+        $4 ~ ("^" expected "/") && $2 != wanted {found=1}
+        END {exit !found}
+      '
+  }
+
+  if ! address_on_interface "$FH_IF" "$RU_MGMT_ADDR"; then
+    if address_exists_elsewhere "$FH_IF" "$ru_mgmt_ip"; then
+      echo "$ru_mgmt_ip is already configured on another interface; refusing to duplicate it." >&2
+      exit 1
+    fi
     if [ "$(cat "/sys/class/net/$FH_IF/carrier" 2>/dev/null || echo 0)" = 1 ]; then
       arp_probe="$(arping -0 -i "$FH_IF" -c 3 -w 3 "$ru_mgmt_ip" 2>&1 || true)"
       if printf '%s\n' "$arp_probe" | grep -Eq '[1-9][0-9]* packets received'; then
@@ -121,6 +129,15 @@ if [ "$SKIP_NETWORK" -eq 0 ]; then
     fi
     ip link add link "$N3_PARENT_INTERFACE" name "$N3_INTERFACE" type vlan id "$N3_VLAN_ID"
   fi
+  if [ -n "${N3_PARENT_INTERFACE:-}" ]; then
+    if [ ! -e "/sys/class/net/$N3_INTERFACE/lower_$N3_PARENT_INTERFACE" ] ||
+       ! ip -d link show dev "$N3_INTERFACE" 2>/dev/null |
+         grep -Eq "vlan protocol 802\.1Q id $N3_VLAN_ID([[:space:]]|$)"; then
+      echo "$N3_INTERFACE already exists but is not VLAN $N3_VLAN_ID on $N3_PARENT_INTERFACE." >&2
+      echo 'Refusing to modify or replace an existing network interface.' >&2
+      exit 1
+    fi
+  fi
   for plane in N2 N3; do
     interface_name="${plane}_INTERFACE"
     cidr_name="${plane}_LOCAL_CIDR"
@@ -132,7 +149,11 @@ if [ "$SKIP_NETWORK" -eq 0 ]; then
         exit 1
       fi
       ip link set "$interface" up
-      if ! ip -4 addr show dev "$interface" | grep -Fq "${cidr%/*}/"; then
+      if address_exists_elsewhere "$interface" "${cidr%/*}"; then
+        echo "${cidr%/*} is already configured on another interface; refusing to duplicate it." >&2
+        exit 1
+      fi
+      if ! address_on_interface "$interface" "$cidr"; then
         ip addr add "$cidr" dev "$interface"
       fi
     else
