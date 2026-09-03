@@ -7,4 +7,5 @@ optional/temp-gm/generated/
 *.pcap
 *.pcapng
 *.log
-config/site.env.*
+config/site.env.pre-*
+config/site.env.backup*
