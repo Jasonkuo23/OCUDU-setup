@@ -3,6 +3,11 @@ set -u
 
 source "$(cd "$(dirname "$0")" && pwd)/load-site-env.sh"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if ! "$SCRIPT_DIR/validate-site-config.sh"; then
+  exit 1
+fi
+
 TEST_LEVEL="${TEST_LEVEL:-smoke}"
 CELL_MODE="${CELL_MODE:-disabled}"
 DU_CONFIG_FILE="${DU_CONFIG_FILE:-config/generated/du-ofh.yml}"
@@ -57,6 +62,11 @@ case "$PTP_ROLE" in
     else
       warn "GM IP $GM_IP did not answer ICMP; L2 PTP may still work"
     fi
+    if [ -S "$PTP_UDS" ]; then
+      pass "ptp4l management socket exists: $PTP_UDS"
+    else
+      fail "ptp4l management socket is missing: $PTP_UDS"
+    fi
     if pmc -u -b 0 -d "$PTP_DOMAIN" -s "$PTP_UDS" 'GET PORT_DATA_SET' 2>/dev/null |
        grep -Eq 'portState[[:space:]]+SLAVE'; then
       pass 'ptp4l reports SLAVE state'
@@ -76,12 +86,13 @@ else
   fail "hugepages=${hp:-0}; expected at least $MIN_HUGEPAGES"
 fi
 
-if uname -a | grep -Eqi 'PREEMPT_RT|realtime'; then
+if [ "$(cat /sys/kernel/realtime 2>/dev/null || printf '0')" = 1 ] ||
+   uname -a | grep -Eqi 'PREEMPT_RT|realtime'; then
   pass 'realtime/PREEMPT_RT kernel active'
-elif [ "$TEST_LEVEL" = smoke ] || [ "$TEST_LEVEL" = pre-rf ]; then
-  warn "generic kernel active; permitted only for the $TEST_LEVEL diagnostic"
+elif [ "$TEST_LEVEL" = smoke ]; then
+  warn 'generic kernel active; permitted only for the RF-disabled smoke diagnostic'
 else
-  fail 'generic kernel active; realtime/PREEMPT_RT required for RF traffic'
+  fail 'generic kernel active; PREEMPT_RT is required for the 90-MHz/4T4R pre-rf flow'
 fi
 
 case "$DU_CONFIG_FILE" in
@@ -118,7 +129,11 @@ case "$CELL_MODE" in
     ;;
 esac
 
-pass "configured DU MAC: $EXPECTED_DU_MAC"
+if [ -f "$cfg" ] && grep -Fq "du_mac_addr: $EXPECTED_DU_MAC" "$cfg"; then
+  pass "generated DU MAC matches configured value: $EXPECTED_DU_MAC"
+else
+  fail "generated DU MAC does not match configured value: $EXPECTED_DU_MAC"
+fi
 
 if awk -v expected="\"$OFH_TIMING_CPU\"" '
     $1 == "timing_cpu:" && $2 == expected { timing = 1 }

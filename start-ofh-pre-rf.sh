@@ -46,4 +46,4 @@ echo "Starting a non-restarting active-cell DU with $DU_CONFIG_FILE while the RU
 DU_CONFIG_FILE="$DU_CONFIG_FILE" DU_CELL_ENABLED=true docker compose --env-file "$OCUDU_CONFIG_FILE" --profile ofh up -d --force-recreate du
 docker compose --env-file "$OCUDU_CONFIG_FILE" --profile ofh ps du
 echo 'Verify F1/eCPRI and RU PA-off state, then stop with:'
-echo '  sudo docker compose --profile ofh stop du'
+echo '  sudo ./cudu.sh cleanup-ofh'

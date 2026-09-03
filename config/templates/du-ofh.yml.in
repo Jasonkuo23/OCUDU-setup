@@ -1,6 +1,6 @@
 f1ap:
-  cu_cp_addr: ${F1_CP_IP}
-  bind_addr: ${F1_DU_IP}
+  addrs: ${F1_CP_IP}
+  bind_addrs: ${F1_DU_IP}
 f1u:
   socket:
     - bind_addr: ${F1_DU_IP}

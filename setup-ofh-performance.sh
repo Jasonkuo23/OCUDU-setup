@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(cd "$(dirname "$0")" && pwd)/load-site-env.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=load-site-env.sh
+source "$SCRIPT_DIR/load-site-env.sh"
+
+"$SCRIPT_DIR/validate-site-config.sh"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run with sudo: sudo $0" >&2
+  exit 1
+fi
+if ! ip link show "$FH_IF" >/dev/null 2>&1; then
+  echo "Configured fronthaul interface does not exist: $FH_IF" >&2
   exit 1
 fi
 
@@ -12,6 +20,17 @@ STATE_DIR="${STATE_DIR:-/run/ocudu-ofh-performance}"
 # The E810 exposes 20 combined TxRx queues. Pin every queue so RSS cannot
 # move fronthaul traffic onto CPUs reserved for PTP or real-time DU workers.
 install -d -m 0700 "$STATE_DIR"
+
+restore_on_error() {
+  local rc="${1:-$?}"
+  trap - ERR INT TERM
+  echo 'Performance setup failed; restoring every saved host setting.' >&2
+  STATE_DIR="$STATE_DIR" "$SCRIPT_DIR/restore-ofh-performance.sh" || true
+  exit "$rc"
+}
+trap 'restore_on_error $?' ERR
+trap 'restore_on_error 130' INT
+trap 'restore_on_error 143' TERM
 
 PTP_WAS_RUNNING=0
 if pgrep -x ptp4l >/dev/null 2>&1 || pgrep -x phc2sys >/dev/null 2>&1; then
@@ -48,10 +67,17 @@ else
   exit 1
 fi
 
-for path in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/energy_performance_preference; do
-  [ -w "$path" ] || continue
-  printf '%s\n' performance > "$path"
-done
+if [ ! -f "$STATE_DIR/epp.before" ]; then
+  : > "$STATE_DIR/epp.before"
+  for path in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/energy_performance_preference; do
+    [ -r "$path" ] || continue
+    printf '%s %s\n' "$path" "$(cat "$path")" >> "$STATE_DIR/epp.before"
+  done
+fi
+
+while read -r path _; do
+  [ -w "$path" ] && printf '%s\n' performance > "$path"
+done < "$STATE_DIR/epp.before"
 
 drm_poll=/sys/module/drm_kms_helper/parameters/poll
 if [ -r "$drm_poll" ] && [ ! -f "$STATE_DIR/drm-poll.before" ]; then
@@ -212,3 +238,4 @@ if [ "$PTP_WAS_RUNNING" -eq 1 ]; then
   echo "WARNING: linuxptp was running while the NIC TX ring was adjusted." >&2
   echo "Restart host linuxptp and verify external-GM SLAVE lock before starting the DU." >&2
 fi
+trap - ERR INT TERM

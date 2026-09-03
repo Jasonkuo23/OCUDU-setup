@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
+# shellcheck source=load-temp-gm-env.sh
 source "$(cd "$(dirname "$0")" && pwd)/load-temp-gm-env.sh"
 
 if [ "$(id -u)" -ne 0 ]; then

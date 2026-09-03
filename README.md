@@ -1,13 +1,33 @@
 # Portable OCUDU CUDU deployment
 
-This directory is a self-contained deployment package for OCUDU CU-CP,
-CU-UP and the 90-MHz/4T4R Open Fronthaul DU. Copy the entire directory to an
-apt-based Ubuntu/Debian x86-64 machine; no path inside the package is tied to
-the original host.
+This directory is a portable deployment package for OCUDU CU-CP, CU-UP and
+the 90-MHz/4T4R Open Fronthaul DU. Copy or clone the entire directory to an
+Ubuntu x86-64 machine; no path inside the package is tied to the original
+host.
 
 The destination still needs a suitable dedicated fronthaul NIC with hardware
 timestamping/PHC support, enough CPU cores and hugepages, an external telecom
 Grandmaster, and an O-RU configured for the same radio profile.
+
+This is not a universal one-command image. NIC names, addresses, CPU layout,
+O-RU MAC/VLAN/eAxC values and PTP profile are site-specific and must be
+verified before `setup.sh` changes the host. The scripts deliberately stop on
+an unsafe or inconsistent value instead of guessing.
+
+## Supported scope and prerequisites
+
+- Ubuntu with `apt` and `systemd`; the automatic package installer is intended
+  for a bare-metal DU host. Other distributions require manual prerequisites.
+- x86-64 CPU with enough dedicated physical cores for the configured cpusets.
+- PREEMPT_RT for the guarded 90-MHz/4T4R pre-RF flow. `setup.sh` does not
+  install or select a realtime kernel.
+- Docker Engine with the Compose v2 plugin.
+- Dedicated 10-Gbps fronthaul NIC with hardware timestamping and a PHC.
+- An externally managed telecom PTP Grandmaster. This package validates the
+  host `ptp4l` management socket and SLAVE state; it does not start or configure
+  the production PTP service.
+- O-RU configuration matching `config/site.env`, with radio and every PA off
+  during this package's pre-RF workflow.
 
 ## Site configuration
 
@@ -18,6 +38,7 @@ included example and edit it for the destination machine:
 cd /path/to/ocudu-cudu-portable
 ./cudu.sh init
 editor config/site.env
+./cudu.sh validate
 ```
 
 Verify these groups before setup:
@@ -53,6 +74,11 @@ sudo ./cudu.sh logs
 fronthaul addresses, allocates hugepages and renders configuration. It does
 not start OCUDU or enable the DU. Plain `up` starts only CU-CP and CU-UP.
 
+Use `sudo` for Docker commands only when the current user cannot access the
+Docker daemon. The wrapper returns generated files to the invoking user's
+ownership, so later non-root rendering remains repeatable. Never provide a
+password to another person or place credentials in `config/site.env`.
+
 Optional setup variants:
 
 ```bash
@@ -60,8 +86,18 @@ sudo ./setup.sh --skip-packages
 sudo ./setup.sh --skip-network
 ```
 
-The runtime network and hugepage changes may need equivalent persistent
-Netplan/systemd/boot configuration on a production host.
+Network addresses, the N3 VLAN and hugepage allocation made by `setup.sh` are
+runtime changes. They do not survive reboot. Either rerun
+`sudo ./setup.sh --skip-packages` after reboot or have the machine administrator create
+equivalent persistent Netplan/NetworkManager and boot-time hugepage settings.
+The installer refuses to replace an existing VLAN whose parent or VLAN ID does
+not match the site configuration.
+
+CU and DU restart policies are intentionally `no`. After a reboot, restore the
+required network, hugepage and PTP state first, then run `./cudu.sh up`. This
+prevents containers from repeatedly restarting against missing runtime
+interfaces. Docker JSON logs are size-limited by Compose to avoid unbounded
+disk growth.
 
 ## Manual CU startup and verification
 
@@ -147,8 +183,7 @@ eAxC settings. Do not bypass a failed gate or enable the radio. Stop the DU and
 restore the host-global tuning with:
 
 ```bash
-sudo docker compose --env-file config/site.env --profile ofh stop du
-sudo ./restore-ofh-performance.sh
+sudo ./cudu.sh cleanup-ofh
 ```
 
 ## DU, external PTP and RF safety
@@ -162,6 +197,12 @@ verify all of the following independently:
   VLAN, MAC and eAxC profile;
 - every O-RU radio and PA remains disabled/off;
 - the RF environment and authorization have been confirmed.
+
+`GM_IP` is a reachability aid; the supported timing transport is L2 PTP. An
+ICMP response from the Grandmaster is not proof of synchronization. The gate
+requires the configured Unix management socket to exist and `pmc` to report a
+SLAVE port in `PTP_DOMAIN`. O-RU lock must still be checked independently on
+the O-RU.
 
 Then run the guarded pre-RF flow:
 
@@ -183,8 +224,7 @@ guarded runtime override while the physical O-RU radio/PAs remain off.
 To stop the DU and restore host-global performance settings:
 
 ```bash
-sudo docker compose --env-file config/site.env --profile ofh stop du
-sudo ./restore-ofh-performance.sh
+sudo ./cudu.sh cleanup-ofh
 ```
 
 ## Optional temporary Grandmaster
@@ -211,6 +251,7 @@ ocudu-cudu-portable/
 ├── cudu.sh
 ├── setup.sh
 ├── render-config.sh
+├── validate-site-config.sh
 └── OFH validation/performance helpers
 ```
 
@@ -228,3 +269,18 @@ attach, smoke-test, packet-capture and recovery-snapshot helpers.
 
 Do not bypass a timing, carrier, configuration or RF-safety gate to make the
 DU start.
+
+## Repository validation
+
+Configuration rendering has a local regression test, and GitHub Actions runs
+that test together with ShellCheck and Compose model validation:
+
+```bash
+./tests/test-config-validation.sh
+```
+
+The test verifies a valid render and rejects missing template values, mutable
+source refs, inconsistent CIDR/IP values, management-address conflicts and an
+eAxC count that disagrees with the antenna count. Hardware, PTP, 5GC and O-RU
+acceptance still require the destination machine; CI cannot prove those
+external conditions.

@@ -28,7 +28,7 @@ repository目錄，將其絕對路徑記為 `PROJECT_DIR`，後續工具呼叫�
 3. 先核對主機實際NIC、IP、CPU、PHC，由LLM自行填入可可靠偵測的config值。
 4. 對無法從主機可靠判定的5GC、O-RU、VLAN、MAC及RF值，詢問使用者要沿用
    本prompt的目前預設值，或只提供需要修改的欄位。
-5. 執行setup、render、build、environment check及CU-CP/CU-UP啟動，驗證E1、
+5. 執行validate、setup、render、build、environment check及CU-CP/CU-UP啟動，驗證E1、
    N2 SCTP、NG Setup與AMF/PLMN。
 6. 通過實體O-RU安全checkpoint後啟動OFH DU，驗證F1 SCTP與F1 Setup。
 7. 記錄每一步安裝指令、結果與任何阻礙部署的腳本問題。不要為了程式碼整理而重構；
@@ -162,6 +162,7 @@ sed -n '1,240p' README.md
 確認後執行：
 
 ```bash
+./cudu.sh validate
 sudo ./setup.sh
 ./cudu.sh render
 sudo ./cudu.sh check
@@ -171,6 +172,11 @@ sudo ./cudu.sh status
 sudo docker logs ocudu-cu-cp --tail 150
 sudo docker logs ocudu-cu-up --tail 150
 ```
+
+`setup.sh`只建立runtime N2/N3/VLAN/fronthaul address與HugePages，不會安裝或切換
+PREEMPT_RT kernel，也不會啟動production `ptp4l`/`phc2sys`。重開機後必須重新執行
+`sudo ./setup.sh --skip-packages`，或由管理者另建persistent network及boot-time
+HugePages設定。production PTP service及其`PTP_UDS`必須在DU gate前獨立完成。
 
 CU階段驗證事項：
 
@@ -260,8 +266,7 @@ carrier、PTP與SCTP證據。停止DU並恢復host-global調校，不可用關�
 啟用radio或隱藏warning來取得假成功：
 
 ```bash
-sudo docker compose --env-file config/site.env --profile ofh stop du
-sudo ./restore-ofh-performance.sh
+sudo ./cudu.sh cleanup-ofh
 ```
 
 若全部成功，依使用者本次要求保留CU與DU running，但在最終報告明確註記external
