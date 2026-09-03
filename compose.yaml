@@ -1,0 +1,53 @@
+# CU-CP/CU-UP start normally. The DU is gated behind the explicit "ofh"
+# profile and cannot start from a plain `docker compose up -d`.
+services:
+  cu-cp:
+    image: ${OCUDU_IMAGE}
+    container_name: ocudu-cu-cp
+    network_mode: host
+    restart: unless-stopped
+    stdin_open: true
+    stop_grace_period: 30s
+    command: ["ocucp", "-c", "/etc/ocudu/cu-cp.yml"]
+    cap_add: [NET_ADMIN, SYS_NICE, IPC_LOCK, PERFMON]
+    volumes:
+      - ./config/generated/cu-cp.yml:/etc/ocudu/cu-cp.yml:ro
+      - ./logs:/var/log/ocudu
+
+  cu-up:
+    image: ${OCUDU_IMAGE}
+    container_name: ocudu-cu-up
+    network_mode: host
+    restart: unless-stopped
+    stdin_open: true
+    stop_grace_period: 30s
+    depends_on:
+      cu-cp:
+        condition: service_started
+    command: ["ocuup", "-c", "/etc/ocudu/cu-up.yml"]
+    cap_add: [NET_ADMIN, SYS_NICE, IPC_LOCK, PERFMON]
+    volumes:
+      - ./config/generated/cu-up.yml:/etc/ocudu/cu-up.yml:ro
+      - ./logs:/var/log/ocudu
+
+  du:
+    profiles: ["ofh"]
+    image: ${OCUDU_IMAGE}
+    container_name: ocudu-du-ofh
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    stop_grace_period: 30s
+    # Site-specific CPU allocation is defined in config/site.env.
+    cpuset: "${DU_CPUSET}"
+    # Never resurrect an active cell automatically after Docker/host restart.
+    restart: "no"
+    command: ["odu", "-c", "/etc/ocudu/du-ofh.yml", "cell_cfg", "--enabled", "${DU_CELL_ENABLED:-false}"]
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE, IPC_LOCK, PERFMON]
+    ulimits:
+      memlock: -1
+    volumes:
+      - ./${DU_CONFIG_FILE:-config/generated/du-ofh.yml}:/etc/ocudu/du-ofh.yml:ro
+      - ./logs:/var/log/ocudu
+      - /dev/hugepages:/dev/hugepages

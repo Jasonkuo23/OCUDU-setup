@@ -1,0 +1,30 @@
+cu_cp:
+  request_pdu_session_timeout: 40
+  inactivity_timer: 7000
+  amf:
+    addr: ${AMF_IP}
+    port: ${AMF_PORT}
+    bind_addr: ${N2_LOCAL_IP}
+    supported_tracking_areas:
+      - tac: ${TAC}
+        plmn_list:
+          - plmn: "${PLMN}"
+            tai_slice_support_list:
+              - sst: ${SST}
+  e1ap:
+    bind_addr: ${E1_CP_IP}
+  f1ap:
+    bind_addr: ${F1_CP_IP}
+
+log:
+  # Docker-native logging avoids delayed file-buffer flushes.
+  filename: stdout
+  all_level: info
+
+pcap:
+  ngap_enable: true
+  ngap_filename: /var/log/ocudu/cu-cp-ngap.pcap
+  f1ap_enable: true
+  f1ap_filename: /var/log/ocudu/cu-cp-f1ap.pcap
+  e1ap_enable: true
+  e1ap_filename: /var/log/ocudu/cu-cp-e1ap.pcap

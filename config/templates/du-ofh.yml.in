@@ -1,0 +1,99 @@
+f1ap:
+  cu_cp_addr: ${F1_CP_IP}
+  bind_addr: ${F1_DU_IP}
+f1u:
+  socket:
+    - bind_addr: ${F1_DU_IP}
+
+ru_ofh:
+  ru_bandwidth_MHz: ${RU_BANDWIDTH_MHZ}
+  t1a_max_cp_dl: ${T1A_MAX_CP_DL}
+  t1a_min_cp_dl: ${T1A_MIN_CP_DL}
+  t1a_max_cp_ul: ${T1A_MAX_CP_UL}
+  t1a_min_cp_ul: ${T1A_MIN_CP_UL}
+  t1a_max_up: ${T1A_MAX_UP}
+  t1a_min_up: ${T1A_MIN_UP}
+  ta4_max: ${TA4_MAX}
+  ta4_min: ${TA4_MIN}
+  is_prach_cp_enabled: true
+  ignore_ecpri_seq_id: false
+  ignore_ecpri_payload_size: false
+  ignore_prach_start_symbol: false
+  log_lates_as_warnings: true
+  warn_unreceived_ru_frames: after_traffic_detection
+  compr_method_ul: ${COMPRESSION_METHOD}
+  compr_bitwidth_ul: ${COMPRESSION_BITWIDTH}
+  compr_method_dl: ${COMPRESSION_METHOD}
+  compr_bitwidth_dl: ${COMPRESSION_BITWIDTH}
+  compr_method_prach: ${COMPRESSION_METHOD}
+  compr_bitwidth_prach: ${COMPRESSION_BITWIDTH}
+  enable_ul_static_compr_hdr: true
+  enable_dl_static_compr_hdr: true
+  iq_scaling: 1.0
+  cells:
+    - network_interface: ${FH_IF}
+      enable_promiscuous: true
+      check_link_status: true
+      mtu: ${OFH_MTU}
+      ru_mac_addr: ${RU_MAC}
+      du_mac_addr: ${DU_MAC}
+      vlan_tag_cp: ${VLAN_CP}
+      vlan_tag_up: ${VLAN_UP}
+      prach_port_id: [${PRACH_PORT_IDS}]
+      dl_port_id: [${DL_PORT_IDS}]
+      ul_port_id: [${UL_PORT_IDS}]
+
+cell_cfg:
+  dl_arfcn: ${RF_ARFCN}
+  band: ${RF_BAND}
+  channel_bandwidth_MHz: ${RF_BANDWIDTH_MHZ}
+  common_scs: ${RF_SCS}
+  nof_antennas_dl: ${RF_DL_ANTENNAS}
+  nof_antennas_ul: ${RF_UL_ANTENNAS}
+  plmn: "${PLMN}"
+  tac: ${TAC}
+  pci: ${RF_PCI}
+  enabled: false
+  tdd_ul_dl_cfg:
+    dl_ul_tx_period: 10
+    nof_dl_slots: 6
+    nof_dl_symbols: 8
+    nof_ul_slots: 3
+    nof_ul_symbols: 0
+  prach:
+    prach_root_sequence_index: 1
+    zero_correlation_zone: 0
+  pdsch:
+    mcs_table: qam64
+  pusch:
+    mcs_table: qam64
+
+log:
+  filename: /var/log/ocudu/du-ofh.log
+  all_level: info
+pcap:
+  mac_enable: true
+  mac_type: dlt
+  mac_filename: /var/log/ocudu/du-ofh-mac.pcap
+  f1ap_enable: true
+  f1ap_filename: /var/log/ocudu/du-ofh-f1ap.pcap
+  f1u_enable: true
+  f1u_filename: /var/log/ocudu/du-ofh-f1u.pcap
+metrics:
+  autostart_stdout_metrics: true
+  enable_json: false
+expert_execution:
+  affinities:
+    main_pool_cpus: "${MAIN_POOL_CPUS}"
+    main_pool_pinning: round-robin
+    ofh:
+      timing_cpu: "${OFH_TIMING_CPU}"
+      txrx_cpus: ["${OFH_TXRX_CPUS}"]
+  cell_affinities:
+    - ru_cpus: "${RU_CPUS}"
+      ru_pinning: round-robin
+  threads:
+    main_pool:
+      backoff_period: 0
+    ofh:
+      enable_busy_waiting: true

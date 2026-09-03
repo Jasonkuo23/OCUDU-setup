@@ -1,0 +1,10 @@
+logs/*
+!logs/.gitkeep
+config/site.env
+config/generated/
+optional/temp-gm/temp-gm.env
+optional/temp-gm/generated/
+*.pcap
+*.pcapng
+*.log
+config/site.env.*

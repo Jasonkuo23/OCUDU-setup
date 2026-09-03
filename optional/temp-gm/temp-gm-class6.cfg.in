@@ -1,0 +1,31 @@
+# DANGER: isolated-lab simulation only. The advertised class-6 quality is
+# deliberately simulated. Keep the RU radio disabled and never attach this
+# profile to a shared timing network.
+[global]
+dataset_comparison              G.8275.x
+G.8275.defaultDS.localPriority  128
+G.8275.portDS.localPriority     128
+maxStepsRemoved                 255
+masterOnly                      1
+slaveOnly                       0
+gmCapable                       1
+priority1                       128
+priority2                       128
+clockClass                      248
+clockAccuracy                   0xFE
+offsetScaledLogVariance         0xFFFF
+timeSource                      0xA0
+logAnnounceInterval             -3
+logSyncInterval                 -4
+logMinDelayReqInterval          -4
+transportSpecific               0x0
+ptp_dst_mac                     01:1B:19:00:00:00
+network_transport               L2
+delay_mechanism                 E2E
+delayAsymmetry                  0
+time_stamping                   hardware
+tx_timestamp_timeout            20
+domainNumber                    ${PTP_DOMAIN}
+logging_level                   6
+summary_interval                0
+uds_address                     ${PTP_RUN_DIR}/ptp4l
