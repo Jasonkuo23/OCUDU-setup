@@ -1,22 +1,29 @@
-# Prompt for a fresh Codex session
+# Prompt for installing and validating a fresh OCUDU CUDU deployment
 
 Copy everything below into a new session.
 
 ---
 
-我要在這台機器完整測試目前workspace中的portable OCUDU CUDU folder。先找出同時包含
-`FRESH-START-PROMPT.md`、`Dockerfile`、`compose.yaml`與`config/`的目錄，將其絕對
-路徑記為 `PROJECT_DIR`，後續工具呼叫都以它作為workdir，不可假設固定home路徑。
+我已將OCUDU-setup repository clone到這台機器。主要目標是使用repository內的
+安裝工具，在這台主機完成OCUDU CUDU安裝、站點設定、image build、服務啟動與連線
+驗收，讓部署完成後可以持續連接既有5GC及實體O-RU。這不是針對repository本身進行
+軟體開發或單元測試的任務；下列檢查是確認安裝與連線正確的部署驗收手段，不是對
+repository做測試的最終目的。
 
-我要完整測試這個folder的
-OCUDU安裝、集中config、image build與完整CUDU啟動流程。請實際執行並逐步驗證，
-不要只提供指令。最低成功標準是CU-CP、CU-UP與DU皆為running，E1及F1連線建立，
-而且明確看到F1 Setup成功；只有CU連上5GC不算完成。
+先找出同時包含`FRESH-START-PROMPT.md`、`Dockerfile`、`compose.yaml`與`config/`的
+repository目錄，將其絕對路徑記為 `PROJECT_DIR`，後續工具呼叫都以它作為workdir，
+不可假設固定home路徑，也不可誤用其他OCUDU source或舊部署目錄。
 
-測試目標：
+請實際完成安裝、設定、build與啟動，不要只提供指令或只做靜態檢查。部署最低成功
+標準是CU-CP、CU-UP與DU皆為running，E1及F1連線建立，而且明確看到F1 Setup成功；
+只有安裝檔案存在、image build成功或CU連上5GC，都不算完整部署完成。
 
-1. 從沒有 `config/site.env`、沒有generated configs、沒有OCUDU containers與
-   `ocudu/split-ofh:26.04` image的狀態開始。
+部署與驗收目標：
+
+1. 以剛clone的repository為起點；repository本身不應包含`config/site.env`或generated
+   configs。先以唯讀方式盤點主機上既有OCUDU containers與`ocudu/split-ofh:26.04`
+   image。若已存在，不得只為模擬fresh test而刪除、停止或覆寫；先確認其所屬部署，
+   再詢問使用者要沿用、遷移或另做乾淨安裝。
 2. 使用 `./cudu.sh init` 建立站點設定。
 3. 先核對主機實際NIC、IP、CPU、PHC，由LLM自行填入可可靠偵測的config值。
 4. 對無法從主機可靠判定的5GC、O-RU、VLAN、MAC及RF值，詢問使用者要沿用
@@ -24,7 +31,9 @@ OCUDU安裝、集中config、image build與完整CUDU啟動流程。請實際執
 5. 執行setup、render、build、environment check及CU-CP/CU-UP啟動，驗證E1、
    N2 SCTP、NG Setup與AMF/PLMN。
 6. 通過實體O-RU安全checkpoint後啟動OFH DU，驗證F1 SCTP與F1 Setup。
-7. 記錄每一步指令、結果與任何腳本問題；若腳本有問題，修正後重新測試。
+7. 記錄每一步安裝指令、結果與任何阻礙部署的腳本問題。不要為了程式碼整理而重構；
+   若確認repository腳本有實際缺陷，做完成部署所需的最小修正，並重新執行受影響的
+   安裝或驗收步驟。
 
 權限處理規則：
 
@@ -32,7 +41,7 @@ OCUDU安裝、集中config、image build與完整CUDU啟動流程。請實際執
    應先使用該機制，不要立刻要求使用者代跑。
 2. 執行Docker操作前先檢查 `docker info`；若失敗，再檢查
    `sudo -n docker info`。執行其他root操作前先檢查 `sudo -n true`。
-3. 如果session已有所需權限，LLM應自行完成全部測試，不要要求使用者代跑。
+3. 如果session已有所需權限，LLM應自行完成全部部署與驗收操作，不要要求使用者代跑。
 4. 如果sudo要求密碼：
    - 不可詢問、接收、顯示或儲存使用者密碼。
    - 不可修改sudoers、Docker socket權限或將使用者加入docker群組。
@@ -55,7 +64,7 @@ cd "<填入實際PROJECT_DIR絕對路徑>"
 sudo ./setup.sh
 printf 'setup_exit=%s\n' "$?"
 
-完成後請回覆完整輸出。我會先驗證setup結果，再繼續render、check、build與啟動測試。
+完成後請回覆完整輸出。我會先驗證setup結果，再繼續render、check、build、啟動與連線驗收。
 ```
 
 Config填寫與詢問規則：
@@ -192,7 +201,7 @@ sudo ./check-cudu-ofh-gates.sh || true
 進入DU階段前，LLM必須提出一個合併確認問題，讓使用者確認或提供變更：
 
 ```text
-要繼續實體OFH DU與F1 Setup測試，請確認：
+要繼續實體OFH DU部署與F1 Setup驗收，請確認：
 1. 是否沿用目前90-MHz/4T4R、VLAN 906與既有eAxC設定？
 2. O-RU是否已套用相同profile，且radio及每個PA均為disabled/off？
 3. external telecom GM IP/domain為何，host ptp4l是否已為SLAVE，RU是否已lock？
@@ -259,8 +268,9 @@ sudo ./restore-ofh-performance.sh
 GM/PTP lock證據、host-global performance tuning仍在作用、RU radio/PA必須持續
 disabled/off，並提供上述停止與restore命令。
 
-請在最後提供pass/fail表格、發現的腳本問題、修改的檔案，以及可重複執行的
-最短完整CUDU安裝指令。最低完成狀態是CU-CP、CU-UP與DU running且E1/F1 Setup成功；
+請在最後提供部署驗收pass/fail表格、發現的腳本問題、修改的檔案，以及其他使用者
+clone這個repository後可重複執行的最短完整CUDU安裝指令。只有CU-CP、CU-UP與DU
+running且E1/F1 Setup成功，才可宣告OCUDU已正確安裝、設定並完成5GC與O-RU連線；
 除非我另行明確授權，O-RU radio/PA必須保持disabled/off。
 
 ---
