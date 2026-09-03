@@ -2,10 +2,11 @@
 set -euo pipefail
 
 TEMP_GM_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=load-temp-gm-env.sh
 source "$TEMP_GM_DIR/load-temp-gm-env.sh"
 
 if [ "$PTP_ROLE" != temp-gm ]; then
-  echo 'Refusing to render: core config/site.env must explicitly set PTP_ROLE=temp-gm.' >&2
+  echo 'Refusing to render: optional temp-gm.env must explicitly set PTP_ROLE=temp-gm.' >&2
   exit 1
 fi
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -u
 
+# shellcheck source=load-temp-gm-env.sh
 source "$(cd "$(dirname "$0")" && pwd)/load-temp-gm-env.sh"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CFG="$PTP_CONFIG"
 HOLDOVER_MARKER="$RUN_DIR/holdover.active"
 ISOLATED_MARKER="$RUN_DIR/isolated-servo.active"
@@ -36,19 +36,18 @@ else
   exit 1
 fi
 
-for daemon in ptp4l; do
-  pid_file="$RUN_DIR/$daemon.pid"
-  if [ ! -f "$pid_file" ]; then
-    printf '[FAIL] %s is not running (missing %s)\n' "$daemon" "$pid_file"
-    printf 'Start the temporary GM successfully before running this check.\n'
-    exit 1
-  fi
-  pid="$(cat "$pid_file")"
-  if [ ! -r "/proc/$pid/comm" ] || [ "$(cat "/proc/$pid/comm")" != "$daemon" ]; then
-    printf '[FAIL] %s is not running; PID file is stale\n' "$daemon"
-    exit 1
-  fi
-done
+daemon=ptp4l
+pid_file="$RUN_DIR/$daemon.pid"
+if [ ! -f "$pid_file" ]; then
+  printf '[FAIL] %s is not running (missing %s)\n' "$daemon" "$pid_file"
+  printf 'Start the temporary GM successfully before running this check.\n'
+  exit 1
+fi
+pid="$(cat "$pid_file")"
+if [ ! -r "/proc/$pid/comm" ] || [ "$(cat "/proc/$pid/comm")" != "$daemon" ]; then
+  printf '[FAIL] %s is not running; PID file is stale\n' "$daemon"
+  exit 1
+fi
 
 holdover_active=0
 isolated_active=0

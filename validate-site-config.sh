@@ -97,9 +97,10 @@ done
   fail 'N3_LOCAL_CIDR address must equal N3_LOCAL_IP'
 [ "$N3_INTERFACE" != "$N3_PARENT_INTERFACE" ] ||
   fail 'N3_INTERFACE must differ from N3_PARENT_INTERFACE'
-[ "$FH_IF" != "$N2_INTERFACE" ] && [ "$FH_IF" != "$N3_INTERFACE" ] &&
-  [ "$FH_IF" != "$N3_PARENT_INTERFACE" ] ||
+if [ "$FH_IF" = "$N2_INTERFACE" ] || [ "$FH_IF" = "$N3_INTERFACE" ] ||
+   [ "$FH_IF" = "$N3_PARENT_INTERFACE" ]; then
   fail 'FH_IF must be dedicated and must not carry N2 or N3'
+fi
 ru_mgmt_ip="${RU_MGMT_ADDR%/*}"
 if [ "$ru_mgmt_ip" = "$RU_IP" ] || [ "$ru_mgmt_ip" = "$GM_IP" ]; then
   fail 'RU_MGMT_ADDR must differ from RU_IP and GM_IP'

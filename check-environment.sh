@@ -17,13 +17,29 @@ fi
 pass 'site configuration validation completed'
 
 for command_name in docker ip ethtool ptp4l phc2sys pmc envsubst sysctl awk grep; do
-  command -v "$command_name" >/dev/null 2>&1 && pass "$command_name is installed" || fail "$command_name is missing"
+  if command -v "$command_name" >/dev/null 2>&1; then
+    pass "$command_name is installed"
+  else
+    fail "$command_name is missing"
+  fi
 done
-docker compose version >/dev/null 2>&1 && pass 'Docker Compose plugin is available' || fail 'Docker Compose plugin is unavailable'
+if docker compose version >/dev/null 2>&1; then
+  pass 'Docker Compose plugin is available'
+else
+  fail 'Docker Compose plugin is unavailable'
+fi
 
-ip link show "$FH_IF" >/dev/null 2>&1 && pass "fronthaul interface exists: $FH_IF" || fail "fronthaul interface is missing: $FH_IF"
 if ip link show "$FH_IF" >/dev/null 2>&1; then
-  ethtool -T "$FH_IF" 2>/dev/null | grep -q 'hardware-raw-clock' && pass "$FH_IF exposes a PHC" || fail "$FH_IF has no hardware raw clock"
+  pass "fronthaul interface exists: $FH_IF"
+else
+  fail "fronthaul interface is missing: $FH_IF"
+fi
+if ip link show "$FH_IF" >/dev/null 2>&1; then
+  if ethtool -T "$FH_IF" 2>/dev/null | grep -q 'hardware-raw-clock'; then
+    pass "$FH_IF exposes a PHC"
+  else
+    fail "$FH_IF has no hardware raw clock"
+  fi
 fi
 address_on_interface() {
   local interface="$1" cidr="$2"
@@ -61,12 +77,16 @@ route_matches() {
   printf '%s\n' "$route" | grep -Eq "(^|[[:space:]])dev $interface([[:space:]]|$)" &&
     printf '%s\n' "$route" | grep -Eq "(^|[[:space:]])src $source([[:space:]]|$)"
 }
-route_matches "$AMF_IP" "$N2_LOCAL_IP" "$N2_INTERFACE" &&
-  pass "AMF route uses $N2_INTERFACE with source $N2_LOCAL_IP" ||
+if route_matches "$AMF_IP" "$N2_LOCAL_IP" "$N2_INTERFACE"; then
+  pass "AMF route uses $N2_INTERFACE with source $N2_LOCAL_IP"
+else
   fail "AMF route does not use $N2_INTERFACE with source $N2_LOCAL_IP"
-route_matches "$UPF_IP" "$N3_LOCAL_IP" "$N3_INTERFACE" &&
-  pass "UPF route uses $N3_INTERFACE with source $N3_LOCAL_IP" ||
+fi
+if route_matches "$UPF_IP" "$N3_LOCAL_IP" "$N3_INTERFACE"; then
+  pass "UPF route uses $N3_INTERFACE with source $N3_LOCAL_IP"
+else
   fail "UPF route does not use $N3_INTERFACE with source $N3_LOCAL_IP"
+fi
 
 expand_cpuset() {
   local list="$1" item first last cpu
@@ -110,17 +130,25 @@ done
 [ "$OFH_IRQ_CPU" != "$OFH_MISC_IRQ_CPU" ] || fail 'OFH_IRQ_CPU and OFH_MISC_IRQ_CPU must differ'
 
 for generated in cu-cp.yml cu-up.yml du-ofh.yml; do
-  [ -s "$SCRIPT_DIR/config/generated/$generated" ] && pass "generated/$generated exists" || fail "generated/$generated is missing; run ./cudu.sh render"
+  if [ -s "$SCRIPT_DIR/config/generated/$generated" ]; then
+    pass "generated/$generated exists"
+  else
+    fail "generated/$generated is missing; run ./cudu.sh render"
+  fi
 done
 
 du_cfg="$SCRIPT_DIR/config/generated/du-ofh.yml"
 if [ -s "$du_cfg" ]; then
-  grep -Fq "du_mac_addr: $DU_MAC" "$du_cfg" &&
-    pass 'generated DU MAC matches site configuration' ||
+  if grep -Fq "du_mac_addr: $DU_MAC" "$du_cfg"; then
+    pass 'generated DU MAC matches site configuration'
+  else
     fail 'generated DU MAC does not match site configuration'
-  grep -Eq '^[[:space:]]+enabled:[[:space:]]+false([[:space:]]*)$' "$du_cfg" &&
-    pass 'generated DU cell is fail-closed' ||
+  fi
+  if grep -Eq '^[[:space:]]+enabled:[[:space:]]+false([[:space:]]*)$' "$du_cfg"; then
+    pass 'generated DU cell is fail-closed'
+  else
     fail 'generated DU cell is not enabled=false'
+  fi
 fi
 
 if docker compose --env-file "$OCUDU_CONFIG_FILE" --profile ofh config -q >/dev/null 2>&1; then

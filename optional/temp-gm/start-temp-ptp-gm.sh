@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=load-temp-gm-env.sh
 source "$(cd "$(dirname "$0")" && pwd)/load-temp-gm-env.sh"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -8,7 +9,6 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CFG="$PTP_CONFIG"
 ISOLATED_MARKER="$RUN_DIR/isolated-servo.active"
 ISOLATED_LOG="$RUN_DIR/phc2sys-isolated.log"
